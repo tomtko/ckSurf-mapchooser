@@ -71,7 +71,7 @@ ConVar g_Cvar_VoteDuration;
 ConVar g_Cvar_RunOff;
 ConVar g_Cvar_RunOffPercent;
 ConVar g_Cvar_ServerTier;
-
+ConVar g_Cvar_IncludeAllMaps;
 Handle g_VoteTimer = null;
 Handle g_RetryTimer = null;
 
@@ -232,6 +232,7 @@ public void OnConfigsExecuted()
 	}
 
 	g_Cvar_ServerTier = FindConVar("sm_server_tier");
+	g_Cvar_IncludeAllMaps = FindConVar("sm_include_all");
 	SelectMapList();
 
 	g_TotalRounds = 0;
@@ -1307,7 +1308,7 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 			
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			if(bIsMapGlobal(szMapName))
+			if(bIsMapGlobal(szMapName) || (GetConVarInt(g_Cvar_IncludeAllMaps) == 1))
 			{
 				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 				g_MapList.PushString(szValue);
