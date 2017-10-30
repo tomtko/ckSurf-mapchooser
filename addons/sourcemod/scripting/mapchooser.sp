@@ -1255,7 +1255,10 @@ public int Native_GetNominatedMapList(Handle plugin, int numParams)
 public void db_setupDatabase()
 {
 	char szError[255];
-	g_hDb = SQL_Connect("mapchooser", false, szError, 255);
+	Handle dbName = FindConVar("sm_mapchooser_db_name");
+	char szDBName[32];
+	GetConVarString(dbName, szDBName, sizeof(szDBName));
+	g_hDb = SQL_Connect(szDBName, false, szError, 255);
 
 	if (g_hDb == null)
 	{

@@ -51,6 +51,7 @@ ConVar g_Cvar_ExcludeCurrent;
 ConVar g_Cvar_ServerTier;
 ConVar g_Cvar_TimerType;
 ConVar g_Cvar_IncludeAllMaps;
+ConVar g_Cvar_DatabaseName;
 
 Menu g_MapMenu = null;
 ArrayList g_MapList = null;
@@ -86,6 +87,8 @@ public void OnPluginStart()
 	g_Cvar_ServerTier = CreateConVar("sm_server_tier", "1.0", "Specifies the servers tier to only include maps from, for example if you want a tier 1-3 server make it 1.3, a tier 2 only server would be 2.0, etc", 0, true, 1.0, true, 6.0);
 	g_Cvar_TimerType = CreateConVar("sm_cksurf_type", "1", "Specifies the type of ckSurf the server is using, 0 for normal/niko/marcos, 1 for fluffys");
 	g_Cvar_IncludeAllMaps = CreateConVar("sm_include_all", "0", "Include all maps in nominate, even if the map isnt found inside the mapycycle.txt/multi_server_mapcycle.txt", 0, true, 0.00, true, 1.0);
+	g_Cvar_DatabaseName = CreateConVar("sm_mapchooser_db_name", "surftimer", "Specifies the database name that will be used in databases.cfg");
+
 	RegConsoleCmd("sm_nominate", Command_Nominate);
 	
 	RegAdminCmd("sm_nominate_addmap", Command_Addmap, ADMFLAG_CHANGEMAP, "sm_nominate_addmap <mapname> - Forces a map to be on the next mapvote.");
@@ -695,7 +698,9 @@ public int Handler_ClientMapSelectMenu(Menu menu, MenuAction action, int param1,
 public void db_setupDatabase()
 {
 	char szError[255];
-	g_hDb = SQL_Connect("mapchooser", false, szError, 255);
+	char szDBName[32];
+	GetConVarString(g_Cvar_DatabaseName, szDBName, sizeof(szDBName));
+	g_hDb = SQL_Connect(szDBName, false, szError, 255);
 
 	if (g_hDb == null)
 	{
