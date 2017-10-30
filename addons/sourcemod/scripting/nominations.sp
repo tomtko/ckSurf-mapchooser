@@ -98,20 +98,29 @@ public void OnConfigsExecuted()
 	SetMapListCompatBind("cksurf", "mapcyclefile");
 	
 	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
-	if(GetConVarBool(multiserver))
+	if (GetConVarBool(multiserver))
 		SetMapListCompatBind("cksurf", "addons/sourcemod/configs/ckSurf/multi_server_mapcycle.txt");
+	else
+		SetConVarBool(g_Cvar_IncludeAllMaps, true);
+
 	if (ReadMapList(g_GlobalMapList, g_mapFileSerial, "cksurf", MAPLIST_FLAG_CLEARARRAY) == null)
 	{
 		if (g_mapFileSerial == -1)
 		{
-			SetFailState("Unable to create a valid map list.");
+			SetConVarBool(g_Cvar_IncludeAllMaps, true);
+			LogError("Unable to create a valid map list.");
 		}
 	}
-	for (int i = 0; i < g_GlobalMapList.Length; i++)
+
+	if (g_GlobalMapList != null)
 	{
-		char sCurrentMap[256];
-		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+		for (int i = 0; i < g_GlobalMapList.Length; i++)
+		{
+			char sCurrentMap[256];
+			g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+		}
 	}
+
 	SelectMapList();
 	//BuildMapMenu();
 }
@@ -740,7 +749,7 @@ public void SelectMapListTierCallback(Handle owner, Handle hndl, const  char[] e
 		{
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			if(bIsMapGlobal(szMapName) || (GetConVarInt(g_Cvar_IncludeAllMaps) == 1))
+			if (!GetConVarBool(g_Cvar_IncludeAllMaps) && bIsMapGlobal(szMapName) || GetConVarBool(g_Cvar_IncludeAllMaps))
 			{
 				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 
@@ -867,7 +876,7 @@ public void SelectCompletedMapsCallback(Handle owner, Handle hndl, const  char[]
 		{
 			SQL_FetchString(hndl, 1, szSteamId, 32);
 			SQL_FetchString(hndl, 2, szMapName, 128);
-			if(bIsMapGlobal(szMapName) || (GetConVarInt(g_Cvar_IncludeAllMaps) == 1))
+			if (!GetConVarBool(g_Cvar_IncludeAllMaps) && bIsMapGlobal(szMapName) || GetConVarBool(g_Cvar_IncludeAllMaps))
 			{
 				time = SQL_FetchFloat(hndl, 3);
 				tier = SQL_FetchInt(hndl, 5);
@@ -1020,7 +1029,7 @@ public void SelectIncompleteMapsCallback(Handle owner, Handle hndl, const  char[
 		{
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			if(bIsMapGlobal(szMapName) || (GetConVarInt(g_Cvar_IncludeAllMaps) == 1))
+			if (!GetConVarBool(g_Cvar_IncludeAllMaps) && bIsMapGlobal(szMapName) || GetConVarBool(g_Cvar_IncludeAllMaps))
 			{
 				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 
@@ -1103,7 +1112,7 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 		{
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			if(bIsMapGlobal(szMapName) || (GetConVarInt(g_Cvar_IncludeAllMaps) == 1))
+			if (!GetConVarBool(g_Cvar_IncludeAllMaps) && bIsMapGlobal(szMapName) || GetConVarBool(g_Cvar_IncludeAllMaps))
 			{
 				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 				g_MapList.PushString(szValue);
@@ -1116,18 +1125,20 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 
 public bool bIsMapGlobal(char[] sMapName)
 {
-	for (int i = 0; i < g_GlobalMapList.Length; i++)
+	if (g_GlobalMapList != null)
 	{
-		char sCurrentMap[256];
-		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
-		
-		if (StrEqual(sCurrentMap, sMapName)) 
-    	{
-        	return true;
-    	}
+		for (int i = 0; i < g_GlobalMapList.Length; i++)
+		{
+			char sCurrentMap[256];
+			g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+			
+			if (StrEqual(sCurrentMap, sMapName)) 
+				return true;
+		}
 	}
 	return false;
 }
+
 public void FormatTimeFloat(int client, float time, int type, char[] string, int length)
 {
 	char szMilli[16];
