@@ -1304,13 +1304,31 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 		char szValue[256];
 		while (SQL_FetchRow(hndl))
 		{
+			
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			Format(szValue, 256, "%s - Tier %i", szMapName, tier);
-			g_MapList.PushString(szValue);
+			if(bIsMapGlobal(szMapName))
+			{
+				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
+				g_MapList.PushString(szValue);
+			}
 		}
 	}
 
 	CreateNextVote();
 	SetupTimeleftTimer();
+}
+public bool bIsMapGlobal(char[] sMapName)
+{
+	for (int i = 0; i < g_GlobalMapList.Length; i++)
+	{
+		char sCurrentMap[256];
+		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+		
+		if (StrEqual(sCurrentMap, sMapName)) 
+    	{
+        	return true;
+    	}
+	}
+	return false;
 }
