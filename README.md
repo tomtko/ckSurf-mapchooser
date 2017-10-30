@@ -1,7 +1,7 @@
 # ckSurf Mapchooser v1
 
 ## About
-This is a edit of the default SourceMod mapchooser and nomination plugin, it provides functionality for any ckSurf based timer to display 
+This is a edit of the default SourceMod mapchooser and nomination plugin, it provides functionality for any ckSurf based timer to display tiers of maps in the nominate and vote menus 
 
 ## Requirements
 
