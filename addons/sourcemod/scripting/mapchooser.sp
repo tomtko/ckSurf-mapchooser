@@ -83,6 +83,7 @@ ArrayList g_NominateList;
 ArrayList g_NominateOwners;
 ArrayList g_OldMapList;
 ArrayList g_NextMapList;
+ArrayList g_GlobalMapList = null;
 Menu g_VoteMenu;
 
 int g_Extends;
@@ -92,7 +93,7 @@ bool g_WaitingForVote;
 bool g_MapVoteCompleted;
 bool g_ChangeMapAtRoundEnd;
 bool g_ChangeMapInProgress;
-//int g_mapFileSerial = -1;
+int g_mapFileSerial = -1;
 
 MapChange g_ChangeTime;
 
@@ -123,6 +124,7 @@ public void OnPluginStart()
 	g_NominateOwners = new ArrayList();
 	g_OldMapList = new ArrayList(arraySize);
 	g_NextMapList = new ArrayList(arraySize);
+	g_GlobalMapList = new ArrayList(arraySize);
 
 	g_Cvar_EndOfMapVote = CreateConVar("sm_mapvote_endvote", "1", "Specifies if MapChooser should run an end of map vote", _, true, 0.0, true, 1.0);
 
@@ -179,7 +181,7 @@ public void OnPluginStart()
 		HookEvent("player_death", Event_PlayerDeath);
 	}
 
-	AutoExecConfig(true, "mapchooser");
+	AutoExecConfig(true, "cksurf_mapchooser");
 
 	//Change the mp_bonusroundtime max so that we have time to display the vote
 	//If you display a vote during bonus time good defaults are 17 vote duration and 19 mp_bonustime
@@ -211,16 +213,23 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnConfigsExecuted()
 {
-	/*if (ReadMapList(g_MapList, g_mapFileSerial, "mapchooser", MAPLIST_FLAG_CLEARARRAY|MAPLIST_FLAG_MAPSFOLDER) != null)
+	SetMapListCompatBind("cksurf", "mapcyclefile");
+	
+	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
+	if(GetConVarBool(multiserver))
+		SetMapListCompatBind("cksurf", "addons/sourcemod/configs/ckSurf/multi_server_mapcycle.txt");
+	if (ReadMapList(g_GlobalMapList, g_mapFileSerial, "cksurf", MAPLIST_FLAG_CLEARARRAY) == null)
 	{
 		if (g_mapFileSerial == -1)
 		{
-			LogError("Unable to create a valid map list.");
+			SetFailState("Unable to create a valid map list.");
 		}
-	}*/
-
-	//CreateNextVote();
-	//SetupTimeleftTimer();
+	}
+	for (int i = 0; i < g_GlobalMapList.Length; i++)
+	{
+		char sCurrentMap[256];
+		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+	}
 
 	g_Cvar_ServerTier = FindConVar("sm_server_tier");
 	SelectMapList();

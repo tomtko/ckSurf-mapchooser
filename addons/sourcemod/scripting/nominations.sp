@@ -53,7 +53,8 @@ ConVar g_Cvar_TimerType;
 
 Menu g_MapMenu = null;
 ArrayList g_MapList = null;
-//int g_mapFileSerial = -1;
+ArrayList g_GlobalMapList = null;
+int g_mapFileSerial = -1;
 
 #define MAPSTATUS_ENABLED (1<<0)
 #define MAPSTATUS_DISABLED (1<<1)
@@ -78,31 +79,39 @@ public void OnPluginStart()
 
 	int arraySize = ByteCountToCells(PLATFORM_MAX_PATH);
 	g_MapList = new ArrayList(arraySize);
-
+	g_GlobalMapList = new ArrayList(arraySize);
 	g_Cvar_ExcludeOld = CreateConVar("sm_nominate_excludeold", "1", "Specifies if the current map should be excluded from the Nominations list", 0, true, 0.00, true, 1.0);
 	g_Cvar_ExcludeCurrent = CreateConVar("sm_nominate_excludecurrent", "1", "Specifies if the MapChooser excluded maps should also be excluded from Nominations", 0, true, 0.00, true, 1.0);
 	g_Cvar_ServerTier = CreateConVar("sm_server_tier", "1.0", "Specifies the servers tier to only include maps from, for example if you want a tier 1-3 server make it 1.3, a tier 2 only server would be 2.0, etc", 0, true, 1.0, true, 6.0);
 	g_Cvar_TimerType = CreateConVar("sm_cksurf_type", "1", "Specifies the type of ckSurf the server is using, 0 for normal/niko/marcos, 1 for fluffys");
 
 	RegConsoleCmd("sm_nominate", Command_Nominate);
-	//RegConsoleCmd("sm_yo", Command_Testinglol);
-
+	
 	RegAdminCmd("sm_nominate_addmap", Command_Addmap, ADMFLAG_CHANGEMAP, "sm_nominate_addmap <mapname> - Forces a map to be on the next mapvote.");
-
+	AutoExecConfig(true, "cksurf_nominations");
 	g_mapTrie = new StringMap();
 }
 
 public void OnConfigsExecuted()
 {
-	SelectMapList();
-	/*if (ReadMapList(g_MapList, g_mapFileSerial, "nominations", MAPLIST_FLAG_CLEARARRAY|MAPLIST_FLAG_MAPSFOLDER) == null)
+	SetMapListCompatBind("cksurf", "mapcyclefile");
+	
+	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
+	if(GetConVarBool(multiserver))
+		SetMapListCompatBind("cksurf", "addons/sourcemod/configs/ckSurf/multi_server_mapcycle.txt");
+	if (ReadMapList(g_GlobalMapList, g_mapFileSerial, "cksurf", MAPLIST_FLAG_CLEARARRAY) == null)
 	{
 		if (g_mapFileSerial == -1)
 		{
 			SetFailState("Unable to create a valid map list.");
 		}
-	}*/
-
+	}
+	for (int i = 0; i < g_GlobalMapList.Length; i++)
+	{
+		char sCurrentMap[256];
+		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+	}
+	SelectMapList();
 	//BuildMapMenu();
 }
 
@@ -227,6 +236,7 @@ public Action Command_Nominate(int client, int args)
 		ReplyToCommand(client, "%t", "Map was not found", displayName);
 		return Plugin_Handled;
 	}
+	
 
 	if ((status & MAPSTATUS_DISABLED) == MAPSTATUS_DISABLED)
 	{
@@ -707,7 +717,7 @@ public void SelectMapListTierCallback(Handle owner, Handle hndl, const  char[] e
 	{
 		Menu menu = CreateMenu(Handler_MapSelectMenu, MENU_ACTIONS_DEFAULT|MenuAction_DrawItem|MenuAction_DisplayItem);
 
-		char map[PLATFORM_MAX_PATH];
+		char szMapName[PLATFORM_MAX_PATH];
 
 		ArrayList excludeMaps;
 		char currentMap[PLATFORM_MAX_PATH];
@@ -727,37 +737,40 @@ public void SelectMapListTierCallback(Handle owner, Handle hndl, const  char[] e
 		char szValue[256];
 		while (SQL_FetchRow(hndl))
 		{
-			SQL_FetchString(hndl, 0, map, 128);
+			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-
-			Format(szValue, 256, "%s - Tier %i", map, tier);
-
-			int status = MAPSTATUS_ENABLED;
-
-			FindMap(map, map, sizeof(map));
-
-			char displayName[PLATFORM_MAX_PATH];
-			GetMapDisplayName(map, displayName, sizeof(displayName));
-
-			if (g_Cvar_ExcludeCurrent.BoolValue)
+			if(bIsMapGlobal(szMapName))
 			{
-				if (StrEqual(map, currentMap))
-				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
-				}
-			}
+				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 
-			/* Dont bother with this check if the current map check passed */
-			if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
-			{
-				if (excludeMaps.FindString(map) != -1 || excludeMaps.FindString(szValue) != -1)
+				int status = MAPSTATUS_ENABLED;
+	
+				FindMap(szMapName, szMapName, sizeof(szMapName));
+	
+				char displayName[PLATFORM_MAX_PATH];
+				GetMapDisplayName(szMapName, displayName, sizeof(displayName));
+				
+				if (g_Cvar_ExcludeCurrent.BoolValue)
 				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
+					if (StrEqual(szMapName, currentMap))
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
+					}
 				}
+	
+				/* Dont bother with this check if the current map check passed */
+				if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
+				{
+					if (excludeMaps.FindString(szMapName) != -1 || excludeMaps.FindString(szValue) != -1)
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
+					}
+				}
+				
+	
+				AddMenuItem(menu, szValue, szMapName);
+				g_mapTrie.SetValue(szMapName, status);
 			}
-
-			AddMenuItem(menu, szValue, map);
-			g_mapTrie.SetValue(map, status);
 		}
 
 		char szTitle[64];
@@ -853,65 +866,68 @@ public void SelectCompletedMapsCallback(Handle owner, Handle hndl, const  char[]
 		{
 			SQL_FetchString(hndl, 1, szSteamId, 32);
 			SQL_FetchString(hndl, 2, szMapName, 128);
-			time = SQL_FetchFloat(hndl, 3);
-			tier = SQL_FetchInt(hndl, 5);
-			rank = SQL_FetchInt(hndl, 6);
-			count = SQL_FetchInt(hndl, 7);
-
-			FormatTimeFloat(client, time, 3, szTime, sizeof(szTime));
-
-			if (time < 3600.0)
-			Format(szTime, 32, "%s", szTime);
-
-			char szS[32];
-			char szT[32];
-			char szTotal[32];
-			IntToString(rank, szT, sizeof(szT));
-			IntToString(count, szS, sizeof(szS));
-			Format(szTotal, sizeof(szTotal), "%s%s", szT, szS);
-			if (strlen(szTotal) == 6)
-				Format(szValue, 128, "%i/%i    %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else if (strlen(szTotal) == 5)
-				Format(szValue, 128, "%i/%i      %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else if (strlen(szTotal) == 4)
-				Format(szValue, 128, "%i/%i        %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else if (strlen(szTotal) == 3)
-				Format(szValue, 128, "%i/%i          %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else if (strlen(szTotal) == 2)
-				Format(szValue, 128, "%i/%i           %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else if (strlen(szTotal) == 1)
-				Format(szValue, 128, "%i/%i            %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-			else
-				Format(szValue, 128, "%i/%i  %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
-
-			Format(szValue2, 256, "%s - Tier %i", szMapName, tier);
-
-			int status = MAPSTATUS_ENABLED;
-
-			FindMap(szMapName, szMapName, sizeof(szMapName));
-
-			char displayName[PLATFORM_MAX_PATH];
-			GetMapDisplayName(szMapName, displayName, sizeof(displayName));
-
-			if (g_Cvar_ExcludeCurrent.BoolValue)
+			if(bIsMapGlobal(szMapName))
 			{
-				if (StrEqual(szMapName, currentMap))
-				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
-				}
-			}
+				time = SQL_FetchFloat(hndl, 3);
+				tier = SQL_FetchInt(hndl, 5);
+				rank = SQL_FetchInt(hndl, 6);
+				count = SQL_FetchInt(hndl, 7);
 
-			/* Dont bother with this check if the current map check passed */
-			if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
-			{
-				if (excludeMaps.FindString(szMapName) != -1 || excludeMaps.FindString(szValue2) != -1)
-				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
-				}
-			}
+				FormatTimeFloat(client, time, 3, szTime, sizeof(szTime));
 
-			AddMenuItem(menu, szValue2, szValue);
-			g_mapTrie.SetValue(szMapName, status);
+				if (time < 3600.0)
+				Format(szTime, 32, "%s", szTime);
+
+				char szS[32];
+				char szT[32];
+				char szTotal[32];
+				IntToString(rank, szT, sizeof(szT));
+				IntToString(count, szS, sizeof(szS));
+				Format(szTotal, sizeof(szTotal), "%s%s", szT, szS);
+				if (strlen(szTotal) == 6)
+					Format(szValue, 128, "%i/%i    %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else if (strlen(szTotal) == 5)
+					Format(szValue, 128, "%i/%i      %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else if (strlen(szTotal) == 4)
+					Format(szValue, 128, "%i/%i        %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else if (strlen(szTotal) == 3)
+					Format(szValue, 128, "%i/%i          %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else if (strlen(szTotal) == 2)
+					Format(szValue, 128, "%i/%i           %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else if (strlen(szTotal) == 1)
+					Format(szValue, 128, "%i/%i            %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+				else
+					Format(szValue, 128, "%i/%i  %s | » %s - Tier %i", rank, count, szTime, szMapName, tier);
+
+				Format(szValue2, 256, "%s - Tier %i", szMapName, tier);
+
+				int status = MAPSTATUS_ENABLED;
+
+				FindMap(szMapName, szMapName, sizeof(szMapName));
+
+				char displayName[PLATFORM_MAX_PATH];
+				GetMapDisplayName(szMapName, displayName, sizeof(displayName));
+
+				if (g_Cvar_ExcludeCurrent.BoolValue)
+				{
+					if (StrEqual(szMapName, currentMap))
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
+					}
+				}
+	
+				/* Dont bother with this check if the current map check passed */
+				if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
+				{
+					if (excludeMaps.FindString(szMapName) != -1 || excludeMaps.FindString(szValue2) != -1)
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
+					}
+				}
+
+				AddMenuItem(menu, szValue2, szValue);
+				g_mapTrie.SetValue(szMapName, status);
+			}
 		}
 		SetMenuExitBackButton(menu, true);
 		DisplayMenu(menu, client, MENU_TIME_FOREVER);
@@ -1003,35 +1019,37 @@ public void SelectIncompleteMapsCallback(Handle owner, Handle hndl, const  char[
 		{
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-
-			Format(szValue, 256, "%s - Tier %i", szMapName, tier);
-
-			int status = MAPSTATUS_ENABLED;
-
-			FindMap(szMapName, szMapName, sizeof(szMapName));
-
-			char displayName[PLATFORM_MAX_PATH];
-			GetMapDisplayName(szMapName, displayName, sizeof(displayName));
-
-			if (g_Cvar_ExcludeCurrent.BoolValue)
+			if(bIsMapGlobal(szMapName))
 			{
-				if (StrEqual(szMapName, currentMap))
-				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
-				}
-			}
+				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
 
-			/* Dont bother with this check if the current map check passed */
-			if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
-			{
-				if (excludeMaps.FindString(szMapName) != -1 || excludeMaps.FindString(szValue) != -1)
-				{
-					status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
-				}
-			}
+				int status = MAPSTATUS_ENABLED;
 
-			AddMenuItem(menu, szValue, szValue);
-			g_mapTrie.SetValue(szMapName, status);
+				FindMap(szMapName, szMapName, sizeof(szMapName));
+
+				char displayName[PLATFORM_MAX_PATH];
+				GetMapDisplayName(szMapName, displayName, sizeof(displayName));
+
+				if (g_Cvar_ExcludeCurrent.BoolValue)
+				{
+					if (StrEqual(szMapName, currentMap))
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
+					}
+				}
+
+				/* Dont bother with this check if the current map check passed */
+				if (g_Cvar_ExcludeOld.BoolValue && status == MAPSTATUS_ENABLED)
+				{
+					if (excludeMaps.FindString(szMapName) != -1 || excludeMaps.FindString(szValue) != -1)
+					{
+						status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
+					}
+				}
+
+				AddMenuItem(menu, szValue, szValue);
+				g_mapTrie.SetValue(szMapName, status);
+			}
 		}
 		SetMenuExitBackButton(menu, true);
 		DisplayMenu(menu, client, MENU_TIME_FOREVER);
@@ -1084,14 +1102,31 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 		{
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			Format(szValue, 256, "%s - Tier %i", szMapName, tier);
-			g_MapList.PushString(szValue);
+			if(bIsMapGlobal(szMapName))
+			{
+				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
+				g_MapList.PushString(szValue);
+			}
 		}
 	}
 
 	BuildMapMenu();
 }
 
+public bool bIsMapGlobal(char[] sMapName)
+{
+	for (int i = 0; i < g_GlobalMapList.Length; i++)
+	{
+		char sCurrentMap[256];
+		g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
+		
+		if (StrEqual(sCurrentMap, sMapName)) 
+    	{
+        	return true;
+    	}
+	}
+	return false;
+}
 public void FormatTimeFloat(int client, float time, int type, char[] string, int length)
 {
 	char szMilli[16];
