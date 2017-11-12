@@ -51,7 +51,7 @@ ConVar g_Cvar_ExcludeCurrent;
 ConVar g_Cvar_ServerTier;
 ConVar g_Cvar_TimerType;
 ConVar g_Cvar_IncludeAllMaps;
-ConVar g_Cvar_DatabaseName;
+ConVar g_Cvar_ShowAllMaps;
 
 Menu g_MapMenu = null;
 ArrayList g_MapList = null;
@@ -87,7 +87,7 @@ public void OnPluginStart()
 	g_Cvar_ServerTier = CreateConVar("sm_server_tier", "1.0", "Specifies the servers tier to only include maps from, for example if you want a tier 1-3 server make it 1.3, a tier 2 only server would be 2.0, etc", 0, true, 1.0, true, 6.0);
 	g_Cvar_TimerType = CreateConVar("sm_cksurf_type", "1", "Specifies the type of ckSurf the server is using, 0 for normal/niko/marcos, 1 for fluffys");
 	g_Cvar_IncludeAllMaps = CreateConVar("sm_include_all", "0", "Include all maps in nominate, even if the map isnt found inside the mapycycle.txt/multi_server_mapcycle.txt", 0, true, 0.00, true, 1.0);
-	g_Cvar_DatabaseName = CreateConVar("sm_mapchooser_db_name", "surftimer", "Specifies the database name that will be used in databases.cfg");
+	g_Cvar_ShowAllMaps = CreateConVar("sm_mapchooser_show_all_maps", "0", "Controls whether to only show ranked maps if using fluffys Surftimer, 0 for ranked maps only, 1 for all maps");
 
 	RegConsoleCmd("sm_nominate", Command_Nominate);
 	
@@ -698,9 +698,7 @@ public int Handler_ClientMapSelectMenu(Menu menu, MenuAction action, int param1,
 public void db_setupDatabase()
 {
 	char szError[255];
-	char szDBName[32];
-	GetConVarString(g_Cvar_DatabaseName, szDBName, sizeof(szDBName));
-	g_hDb = SQL_Connect(szDBName, false, szError, 255);
+	g_hDb = SQL_Connect("surftimer", false, szError, 255);
 
 	if (g_hDb == null)
 	{
@@ -714,8 +712,14 @@ public void db_setupDatabase()
 public void SelectMapListTier(int client, char szTier[32])
 {
 	char szQuery[256];
-
-	Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' ANd tier = %s;", PERCENT, PERCENT, szTier);
+	if (GetConVarInt(g_Cvar_TimerType) == 1 && !GetConVarBool(g_Cvar_ShowAllMaps))
+	{
+		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' ANd tier = %s AND ranked = 1;", PERCENT, PERCENT, szTier);
+	}
+	else
+	{
+		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' ANd tier = %s;", PERCENT, PERCENT, szTier);
+	}
 
 	SQL_TQuery(g_hDb, SelectMapListTierCallback, szQuery, client, DBPrio_Low);
 }
@@ -1082,17 +1086,23 @@ public void SelectMapList()
 	GetConVarString(g_Cvar_ServerTier, szTier, sizeof(szTier));
 	ExplodeString(szTier, ".", szBuffer, 2, 32);
 
+	char szRanked[32];
+	if (GetConVarInt(g_Cvar_TimerType) == 1 && !GetConVarBool(g_Cvar_ShowAllMaps))
+		Format(szRanked, sizeof(szRanked), "AND ranked = 1;");
+	else
+		Format(szRanked, sizeof(szRanked), ";");
+
 	if (StrEqual(szBuffer[1], "0"))
 	{
-		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s", PERCENT, PERCENT, szBuffer[0]);
+		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s %s", PERCENT, PERCENT, szBuffer[0], szRanked);
 	}
 	else if (strlen(szBuffer[1]) > 0)
 	{
-		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s;", PERCENT, PERCENT, szBuffer[0], szBuffer[1]);
+		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s %s", PERCENT, PERCENT, szBuffer[0], szBuffer[1], szRanked);
 	}
 	else
 	{
-		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c';", PERCENT, PERCENT);
+		Format(szQuery, 256, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' %s", PERCENT, PERCENT, szRanked);
 	}
 
 	SQL_TQuery(g_hDb, SelectMapListCallback, szQuery, DBPrio_Low);
