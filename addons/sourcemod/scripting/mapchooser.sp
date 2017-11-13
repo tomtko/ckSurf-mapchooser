@@ -154,6 +154,7 @@ public void OnPluginStart()
 	g_Cvar_Bonusroundtime = FindConVar("mp_bonusroundtime");
 	g_Cvar_TimerType = FindConVar("sm_cksurf_type");
 	g_Cvar_ShowAllMaps = FindConVar("sm_mapchooser_show_all_maps");
+	
 
 	if (g_Cvar_Winlimit || g_Cvar_Maxrounds)
 	{
@@ -218,6 +219,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnConfigsExecuted()
 {
 	SetMapListCompatBind("cksurf", "mapcyclefile");
+
+	g_Cvar_ServerTier = FindConVar("sm_server_tier");
+	g_Cvar_IncludeAllMaps = FindConVar("sm_include_all");
 	
 	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
 	if (GetConVarBool(multiserver))
@@ -243,8 +247,6 @@ public void OnConfigsExecuted()
 		}
 	}
 
-	g_Cvar_ServerTier = FindConVar("sm_server_tier");
-	g_Cvar_IncludeAllMaps = FindConVar("sm_include_all");
 	SelectMapList();
 
 	g_TotalRounds = 0;
