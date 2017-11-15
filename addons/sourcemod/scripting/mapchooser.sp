@@ -152,8 +152,6 @@ public void OnPluginStart()
 	g_Cvar_Maxrounds = FindConVar("mp_maxrounds");
 	g_Cvar_Fraglimit = FindConVar("mp_fraglimit");
 	g_Cvar_Bonusroundtime = FindConVar("mp_bonusroundtime");
-	g_Cvar_TimerType = FindConVar("sm_cksurf_type");
-	g_Cvar_ShowAllMaps = FindConVar("sm_mapchooser_show_all_maps");
 	
 
 	if (g_Cvar_Winlimit || g_Cvar_Maxrounds)
@@ -220,8 +218,9 @@ public void OnConfigsExecuted()
 {
 	SetMapListCompatBind("cksurf", "mapcyclefile");
 
-	g_Cvar_ServerTier = FindConVar("sm_server_tier");
 	g_Cvar_IncludeAllMaps = FindConVar("sm_include_all");
+	g_Cvar_TimerType = FindConVar("sm_cksurf_type");
+	g_Cvar_ShowAllMaps = FindConVar("sm_mapchooser_show_all_maps");
 	
 	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
 	if (GetConVarBool(multiserver))
@@ -1274,38 +1273,36 @@ public void db_setupDatabase()
 
 public void SelectMapList()
 {
-	/*if (g_Cvar_ServerTier != null)
-	{*/
-		char szQuery[128];
+	g_Cvar_ServerTier = FindConVar("sm_server_tier");
+	
+	char szQuery[128];
+	char szTier[16];
+	char szBuffer[2][32];
+	GetConVarString(g_Cvar_ServerTier, szTier, sizeof(szTier));
+	//FloatToString(tier, szTier, 16);
+	ExplodeString(szTier, ".", szBuffer, 2, 32);
+	//ReplaceString(szBuffer[1], 32, "0", "", false);
 
-		char szTier[16];
-		char szBuffer[2][32];
-		GetConVarString(g_Cvar_ServerTier, szTier, sizeof(szTier));
-		//FloatToString(tier, szTier, 16);
-		ExplodeString(szTier, ".", szBuffer, 2, 32);
-		//ReplaceString(szBuffer[1], 32, "0", "", false);
+	char szRanked[32];
+	if (GetConVarInt(g_Cvar_TimerType) == 1 && !GetConVarBool(g_Cvar_ShowAllMaps))
+		Format(szRanked, sizeof(szRanked), "AND ranked = 1;");
+	else
+		Format(szRanked, sizeof(szRanked), ";");
 
-		char szRanked[32];
-		if (GetConVarInt(g_Cvar_TimerType) == 1 && !GetConVarBool(g_Cvar_ShowAllMaps))
-			Format(szRanked, sizeof(szRanked), "AND ranked = 1;");
-		else
-			Format(szRanked, sizeof(szRanked), ";");
+	if (StrEqual(szBuffer[1], "0"))
+	{
+		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s %s", PERCENT, PERCENT, szBuffer[0], szRanked);
+	}
+	else if (strlen(szBuffer[1]) > 0)
+	{
+		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s %s", PERCENT, PERCENT, szBuffer[0], szBuffer[1], szRanked);
+	}
+	else
+	{
+		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' %s", PERCENT, PERCENT, szRanked);
+	}
 
-		if (StrEqual(szBuffer[1], "0"))
-		{
-			Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s %s", PERCENT, PERCENT, szBuffer[0], szRanked);
-		}
-		else if (strlen(szBuffer[1]) > 0)
-		{
-			Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s %s", PERCENT, PERCENT, szBuffer[0], szBuffer[1], szRanked);
-		}
-		else
-		{
-			Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' %s", PERCENT, PERCENT, szRanked);
-		}
-
-		SQL_TQuery(g_hDb, SelectMapListCallback, szQuery, DBPrio_Low);
-	/*}*/
+	SQL_TQuery(g_hDb, SelectMapListCallback, szQuery, DBPrio_Low);
 }
 
 public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error, any data)
