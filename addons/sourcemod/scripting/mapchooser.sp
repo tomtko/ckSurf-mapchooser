@@ -71,7 +71,6 @@ ConVar g_Cvar_VoteDuration;
 ConVar g_Cvar_RunOff;
 ConVar g_Cvar_RunOffPercent;
 ConVar g_Cvar_ServerTier;
-ConVar g_Cvar_IncludeAllMaps;
 Handle g_VoteTimer = null;
 Handle g_RetryTimer = null;
 ConVar g_Cvar_TimerType;
@@ -85,7 +84,6 @@ ArrayList g_NominateList;
 ArrayList g_NominateOwners;
 ArrayList g_OldMapList;
 ArrayList g_NextMapList;
-ArrayList g_GlobalMapList = null;
 Menu g_VoteMenu;
 
 int g_Extends;
@@ -95,7 +93,7 @@ bool g_WaitingForVote;
 bool g_MapVoteCompleted;
 bool g_ChangeMapAtRoundEnd;
 bool g_ChangeMapInProgress;
-int g_mapFileSerial = -1;
+// int g_mapFileSerial = -1;
 
 MapChange g_ChangeTime;
 
@@ -126,7 +124,6 @@ public void OnPluginStart()
 	g_NominateOwners = new ArrayList();
 	g_OldMapList = new ArrayList(arraySize);
 	g_NextMapList = new ArrayList(arraySize);
-	g_GlobalMapList = new ArrayList(arraySize);
 
 	g_Cvar_EndOfMapVote = CreateConVar("sm_mapvote_endvote", "1", "Specifies if MapChooser should run an end of map vote", _, true, 0.0, true, 1.0);
 
@@ -218,34 +215,8 @@ public void OnConfigsExecuted()
 {
 	SetMapListCompatBind("cksurf", "mapcyclefile");
 
-	g_Cvar_IncludeAllMaps = FindConVar("sm_include_all");
 	g_Cvar_TimerType = FindConVar("sm_cksurf_type");
 	g_Cvar_ShowAllMaps = FindConVar("sm_mapchooser_show_all_maps");
-	
-	Handle multiserver = FindConVar("ck_multi_server_mapcycle");
-	if (GetConVarBool(multiserver))
-		SetMapListCompatBind("cksurf", "addons/sourcemod/configs/ckSurf/multi_server_mapcycle.txt");
-	else
-		SetConVarBool(g_Cvar_IncludeAllMaps, true);
-		
-	if (ReadMapList(g_GlobalMapList, g_mapFileSerial, "cksurf", MAPLIST_FLAG_CLEARARRAY) == null)
-	{
-		if (g_mapFileSerial == -1)
-		{
-			SetConVarBool(g_Cvar_IncludeAllMaps, true);
-			LogError("Unable to create a valid map list.");
-		}
-	}
-
-	if (g_GlobalMapList != null)
-	{
-		for (int i = 0; i < g_GlobalMapList.Length; i++)
-		{
-			char sCurrentMap[256];
-			g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
-		}
-	}
-
 	SelectMapList();
 
 	g_TotalRounds = 0;
@@ -735,6 +706,9 @@ public void Handler_VoteFinishedGeneric(Menu menu,
 	char map[PLATFORM_MAX_PATH];
 	char displayName[PLATFORM_MAX_PATH];
 	menu.GetItem(item_info[0][VOTEINFO_ITEM_INDEX], map, sizeof(map), _, displayName, sizeof(displayName));
+	char map2[2][PLATFORM_MAX_PATH];
+	ExplodeString(map, " -", map2, 2, PLATFORM_MAX_PATH);
+	Format(map, sizeof(map), "%s", map2[0]);
 
 	if (strcmp(map, VOTE_EXTEND, false) == 0)
 	{
@@ -796,6 +770,7 @@ public void Handler_VoteFinishedGeneric(Menu menu,
 	}
 	else
 	{
+		PrintToChatAll(map);
 		if (g_ChangeTime == MapChange_MapEnd)
 		{
 			SetNextMap(map);
@@ -1285,17 +1260,17 @@ public void SelectMapList()
 
 	char szRanked[32];
 	if (GetConVarInt(g_Cvar_TimerType) == 1 && !GetConVarBool(g_Cvar_ShowAllMaps))
-		Format(szRanked, sizeof(szRanked), "AND ranked = 1;");
+		Format(szRanked, sizeof(szRanked), " AND ranked = 1;");
 	else
 		Format(szRanked, sizeof(szRanked), ";");
 
 	if (StrEqual(szBuffer[1], "0"))
 	{
-		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s %s", PERCENT, PERCENT, szBuffer[0], szRanked);
+		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier = %s%s", PERCENT, PERCENT, szBuffer[0], szRanked);
 	}
 	else if (strlen(szBuffer[1]) > 0)
 	{
-		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s %s", PERCENT, PERCENT, szBuffer[0], szBuffer[1], szRanked);
+		Format(szQuery, 128, "SELECT mapname, tier FROM ck_maptier WHERE mapname LIKE '%csurf%c' AND tier >= %s AND tier <= %s%s", PERCENT, PERCENT, szBuffer[0], szBuffer[1], szRanked);
 	}
 	else
 	{
@@ -1325,30 +1300,11 @@ public void SelectMapListCallback(Handle owner, Handle hndl, const  char[] error
 			
 			SQL_FetchString(hndl, 0, szMapName, 128);
 			tier = SQL_FetchInt(hndl, 1);
-			if (!GetConVarBool(g_Cvar_IncludeAllMaps) && bIsMapGlobal(szMapName) || GetConVarBool(g_Cvar_IncludeAllMaps))
-			{
-				Format(szValue, 256, "%s - Tier %i", szMapName, tier);
-				g_MapList.PushString(szValue);
-			}
+			Format(szValue, 256, "%s - Tier %i", szMapName, tier);
+			g_MapList.PushString(szValue);
 		}
 	}
 
 	CreateNextVote();
 	SetupTimeleftTimer();
-}
-
-public bool bIsMapGlobal(char[] sMapName)
-{
-	if (g_GlobalMapList != null)
-	{
-		for (int i = 0; i < g_GlobalMapList.Length; i++)
-		{
-			char sCurrentMap[256];
-			g_GlobalMapList.GetString(i, sCurrentMap, sizeof(sCurrentMap));
-			
-			if (StrEqual(sCurrentMap, sMapName)) 
-				return true;
-		}
-	}
-	return false;
 }
