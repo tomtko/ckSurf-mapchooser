@@ -359,7 +359,7 @@ public void db_selectPlayersDataCallback(Handle owner, Handle hndl, const char[]
 	if (SQL_HasResultSet(hndl) && SQL_FetchRow(hndl))
 	{
 		rank = SQL_GetRowCount(hndl);
-		points = SQL_FetchInt(hndl, 0);
+		points = SQL_FetchInt(hndl, 1);
 	}
 	else
 		rank = 99999;
